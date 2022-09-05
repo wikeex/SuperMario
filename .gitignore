@@ -118,3 +118,5 @@ config/pro_config.ini
 *.db
 activate
 *.ini
+checkpoints/
+master_buffer_files/
