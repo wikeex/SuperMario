@@ -47,16 +47,20 @@ def on_release(key):
         return
 
 
-def cache(state, next_state, action, reward, done):
+def mario_params_to_tensors(state, next_state, action, reward, done):
     state = state.__array__()
     next_state = next_state.__array__()
+
     state = torch.tensor(state)
     next_state = torch.tensor(next_state)
     action = torch.tensor([action])
     reward = torch.tensor([reward])
     done = torch.tensor([done])
+    return state, next_state, action, reward, done
 
-    Cache.append((state, next_state, action, reward, done,))
+
+def cache(state, next_state, action, reward, done):
+    Cache.append(*(mario_params_to_tensors(state, next_state, action, reward, done)))
 
 
 def save(filename):

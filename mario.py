@@ -4,8 +4,8 @@ from collections import deque
 import numpy as np
 import torch
 
-import environment
 import master_buffer
+from master_buffer import mario_params_to_tensors
 from net import MarioNet
 
 
@@ -28,11 +28,11 @@ class Mario:
         self.curr_step = 0
 
         self.save_every = 5e5  # no. of experiences between saving Mario Net
-        self.memory = deque(maxlen=40000)
+        self.memory = deque(maxlen=80000)
         self.batch_size = 32
 
         # load master buffer memory
-        self.master_memory = master_buffer.load('/Users/admin/PycharmProjects/SuperMario/master_buffer_files')
+        self.master_memory = master_buffer.load('./master_buffer_files')
 
         self.gamma = 0.9
 
@@ -88,21 +88,7 @@ class Mario:
         reward (float),
         done(bool))
         """
-        state = state.__array__()
-        next_state = next_state.__array__()
-
-        if self.use_cuda:
-            state = torch.tensor(state).cuda()
-            next_state = torch.tensor(next_state).cuda()
-            action = torch.tensor([action]).cuda()
-            reward = torch.tensor([reward]).cuda()
-            done = torch.tensor([done]).cuda()
-        else:
-            state = torch.tensor(state)
-            next_state = torch.tensor(next_state)
-            action = torch.tensor([action])
-            reward = torch.tensor([reward])
-            done = torch.tensor([done])
+        state, next_state, action, reward, done = mario_params_to_tensors(state, next_state, action, reward, done)
 
         if self.curr_step < self.burnin:
             self.memory.append((state, next_state, action, reward, done,))

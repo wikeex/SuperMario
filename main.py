@@ -50,10 +50,11 @@ def train(env):
             if done or info["flag_get"]:
                 break
 
-        logger.log_episode()
+        if mario.curr_step > mario.burnin:
+            logger.log_episode()
 
-        if e % 20 == 0:
-            logger.record(episode=e, epsilon=mario.exploration_rate, step=mario.curr_step)
+            if e % 20 == 0:
+                logger.record(episode=e, epsilon=mario.exploration_rate, step=mario.curr_step)
 
 
 if __name__ == '__main__':
