@@ -27,7 +27,7 @@ class Mario:
         self.exploration_rate_min = 0.05
         self.curr_step = 0
 
-        self.save_every = 5e5  # no. of experiences between saving Mario Net
+        self.save_every = 1e5  # no. of experiences between saving Mario Net
         self.memory = deque(maxlen=80000)
         self.batch_size = 32
 
@@ -106,7 +106,11 @@ class Mario:
         else:
             batch = random.sample(self.master_memory, self.batch_size)
         state, next_state, action, reward, done = map(torch.stack, zip(*batch))
-        return state, next_state, action.squeeze(), reward.squeeze(), done.squeeze()
+        if self.use_cuda:
+            return (state.cuda(), next_state.cuda(), action.squeeze().cuda(),
+                    reward.squeeze().cuda(), done.squeeze().cuda())
+        else:
+            return state, next_state, action.squeeze(), reward.squeeze(), done.squeeze()
 
     def td_estimate(self, state, action):
         current_q = self.net(state, model="online")[

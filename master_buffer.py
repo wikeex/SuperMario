@@ -60,7 +60,7 @@ def mario_params_to_tensors(state, next_state, action, reward, done):
 
 
 def cache(state, next_state, action, reward, done):
-    Cache.append(*(mario_params_to_tensors(state, next_state, action, reward, done)))
+    Cache.append(mario_params_to_tensors(state, next_state, action, reward, done))
 
 
 def save(filename):
@@ -100,7 +100,7 @@ def play():
         cache(state, next_state, action, reward, done)
         state = next_state
 
-        if done or info['flag_get'] is True:
+        if info['flag_get']:
             while True:
                 choice = input(f'需要保存本批次数据吗？输入y或者n并按回车\n')
                 if choice == 'y':
@@ -114,6 +114,8 @@ def play():
                     print('输入有误，请重新输入\n')
                     continue
             break
+        if done and not info['flag_get']:
+            env.reset()
         time.sleep(0.044)
     env.close()
 
