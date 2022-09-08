@@ -28,11 +28,11 @@ class Mario:
         self.curr_step = 0
 
         self.save_every = 1e5  # no. of experiences between saving Mario Net
-        self.memory = deque(maxlen=80000)
+        self.memory = deque(maxlen=20000)
         self.batch_size = 32
 
         # load master buffer memory
-        self.master_memory = master_buffer.load('./master_buffer_files')
+        self.master_memory = master_buffer.load('./master_buffer_224*224')
 
         self.gamma = 0.9
 

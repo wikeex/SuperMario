@@ -3,7 +3,7 @@ from pathlib import Path
 
 import torch
 
-from environment import init_env
+from environment import init_resnet18_env
 from mlog import MetricLogger
 from mario import Mario
 
@@ -58,5 +58,5 @@ def train(env):
 
 
 if __name__ == '__main__':
-    custom_env = init_env()
+    custom_env = init_resnet18_env()
     train(custom_env)

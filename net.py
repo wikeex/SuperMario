@@ -2,39 +2,51 @@ import copy
 
 import torch
 from torch import nn
+from torchvision import models
 
 
 class BaseNet(nn.Module):
     def __init__(self, input_dim, output_dim):
         super().__init__()
         c, h, w = input_dim
-        self.front_bone = nn.Sequential(
-            nn.Conv2d(in_channels=c, out_channels=32, kernel_size=8, stride=4),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=4, stride=2),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1),
-            nn.ReLU(),
-            nn.Flatten()
-        )
+
+        if torch.cuda.is_available():
+            self.lstm_init1 = torch.randn(3, 256).cuda()
+            self.lstm_init2 = torch.randn(3, 256).cuda()
+        else:
+            self.lstm_init1 = torch.randn(3, 256)
+            self.lstm_init2 = torch.randn(3, 256)
+
+        self.resnet18 = models.resnet18(input_dim, pretrained=True)
+        self.resnet18_front = nn.Sequential(*list(self.resnet18.children())[:-1])
+        self.flatten = nn.Flatten()
+        self.lstm = nn.LSTM(input_size=512, hidden_size=256, num_layers=3)
 
         self.a_back_bone = nn.Sequential(
-            nn.Linear(3136, 512),
+            nn.Linear(256, 512),
             nn.ReLU(),
             nn.Linear(512, output_dim),
         )
 
         self.v_back_bone = nn.Sequential(
-            nn.Linear(3136, 512),
+            nn.Linear(256, 256),
             nn.ReLU(),
-            nn.Linear(512, 1),
+            nn.Linear(256, 1),
         )
 
-    def forward(self, input):
-        front_t = self.front_bone(input)
-        a_t: torch.Tensor = self.a_back_bone(front_t)
-        v_t = self.v_back_bone(front_t)
-        return a_t + v_t - torch.mean(a_t, dim=-1, keepdim=True)
+    def forward(self, input, ignore_front=False):
+        if ignore_front is not True:
+            with torch.no_grad():
+                front_t = self.resnet18_front(input)
+                flatten_t = self.flatten(front_t)
+        else:
+            flatten_t = input
+
+        # TODO: 直接输出resnet的结果作为state和next_state
+        lstm_t, _ = self.lstm(flatten_t, (self.lstm_init1, self.lstm_init2))
+        a_t: torch.Tensor = self.a_back_bone(lstm_t)
+        v_t = self.v_back_bone(lstm_t)
+        return a_t + v_t - torch.mean(a_t, dim=-1, keepdim=True), flatten_t
 
 
 class MarioNet(nn.Module):
@@ -58,8 +70,8 @@ class MarioNet(nn.Module):
         for p in self.target.parameters():
             p.requires_grad = False
 
-    def forward(self, input, model):
+    def forward(self, input, model, ignore_front=False):
         if model == "online":
-            return self.online(input)
+            return self.online(input, ignore_front)
         elif model == "target":
-            return self.target(input)
+            return self.target(input, ignore_front)

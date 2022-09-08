@@ -51,8 +51,8 @@ class GrayScaleObservation(gym.ObservationWrapper):
 
     def observation(self, observation):
         observation = self.permute_orientation(observation)
-        transform = T.Grayscale()
-        observation = transform(observation)
+        # transform = T.Grayscale()
+        # observation = transform(observation)
         return observation
 
 
@@ -83,4 +83,15 @@ def init_env():
     env = GrayScaleObservation(env)
     env = ResizeObservation(env, shape=84)
     env = FrameStack(env, num_stack=4)
+    return env
+
+
+def init_resnet18_env():
+    env = gym_super_mario_bros.make("SuperMarioBros-1-1-v0")
+    env = JoypadSpace(env, custom_space)
+
+    env = SkipFrame(env, skip=4)
+    env = GrayScaleObservation(env)
+    env = ResizeObservation(env, shape=224)
+
     return env
