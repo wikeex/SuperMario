@@ -19,10 +19,11 @@ def train(env):
 
     logger = MetricLogger(save_dir)
 
-    episodes = 10000
+    episodes = 20000
     for e in range(episodes):
 
-        state = env.reset()
+        raw_state = env.reset()
+        state = mario.compose_state(raw_state)
 
         # Play the game!
         while True:
@@ -32,7 +33,9 @@ def train(env):
             action = mario.act(state)
 
             # Agent performs action
-            next_state, reward, done, info = env.step(action)
+            next_raw_state, reward, done, info = env.step(action)
+
+            next_state = mario.compose_state(next_raw_state)
 
             # Learn
             q, loss = mario.learn()

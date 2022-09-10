@@ -5,7 +5,6 @@ import numpy as np
 import torch
 
 import master_buffer
-from master_buffer import mario_params_to_tensors
 from net import MarioNet
 
 
@@ -28,18 +27,18 @@ class Mario:
         self.curr_step = 0
 
         self.save_every = 1e5  # no. of experiences between saving Mario Net
-        self.memory = deque(maxlen=20000)
-        self.batch_size = 32
+        self.memory = deque(maxlen=200000)
+        self.batch_size = 64
 
         # load master buffer memory
         self.master_memory = master_buffer.load('./master_buffer_224*224')
 
-        self.gamma = 0.9
+        self.gamma = 0.98
 
-        self.optimizer = torch.optim.Adam(self.net.parameters(), lr=0.00025)
+        self.optimizer = torch.optim.Adam(self.net.parameters(), lr=0.001)
         self.loss_fn = torch.nn.SmoothL1Loss()
 
-        self.burnin = 5e3  # min. experiences before training
+        self.burnin = 1e4  # min. experiences before training
         self.learn_every = 1  # no. of experiences between updates to Q_online
         self.sync_every = 1e4  # no. of experiences between Q_target & Q_online sync
 
@@ -60,15 +59,8 @@ class Mario:
 
         # EXPLOIT
         else:
-            state = state.__array__()
-            if self.use_cuda:
-                state = torch.tensor(state).cuda()
-            else:
-                state = torch.tensor(state)
-            state = state.unsqueeze(0)
-            action_values = self.net(state, model="online")
+            action_values, _ = self.net(state, model="online", ignore_front=True)
             action_idx = torch.argmax(action_values, dim=1).item()
-
         # decrease exploration_rate
         self.exploration_rate *= self.exploration_rate_decay
         self.exploration_rate = max(self.exploration_rate_min, self.exploration_rate)
@@ -76,6 +68,16 @@ class Mario:
         # increment step
         self.curr_step += 1
         return action_idx
+
+    def compose_state(self, state):
+        state = state.__array__()
+        if self.use_cuda:
+            state = torch.tensor(state).cuda()
+        else:
+            state = torch.tensor(state)
+        state = state.unsqueeze(0)
+        _, state = self.net(state, model="online", only_front=True)
+        return state
 
     def cache(self, state, next_state, action, reward, done, loss):
         """
@@ -88,24 +90,28 @@ class Mario:
         reward (float),
         done(bool))
         """
-        state, next_state, action, reward, done = mario_params_to_tensors(state, next_state, action, reward, done)
-
-        if self.curr_step < self.burnin:
-            self.memory.append((state, next_state, action, reward, done,))
-        else:
-            self.loss_sum += loss
-            if loss > self.loss_sum / self.curr_step:
-                self.memory.append((state, next_state, action, reward, done,))
+        action = torch.tensor([action])
+        reward = torch.tensor([reward])
+        done = torch.tensor([done])
+        self.memory.append((state, next_state, action, reward, done,))
+        # if self.curr_step < self.burnin:
+        #     self.memory.append((state, next_state, action, reward, done,))
+        # else:
+        #     self.loss_sum += loss
+        #     if loss > self.loss_sum / self.curr_step:
+        #         self.memory.append((state, next_state, action, reward, done,))
 
     def recall(self):
         """
         Retrieve a batch of experiences from memory
         """
-        if random.randint(0, 9) in range(0, 5):
-            batch = random.sample(self.memory, self.batch_size)
-        else:
+        if random.randint(0, 9) in range(0, 5) and self.master_memory:
             batch = random.sample(self.master_memory, self.batch_size)
+        else:
+            batch = random.sample(self.memory, self.batch_size)
         state, next_state, action, reward, done = map(torch.stack, zip(*batch))
+        state = state.squeeze(1)
+        next_state = next_state.squeeze(1)
         if self.use_cuda:
             return (state.cuda(), next_state.cuda(), action.squeeze().cuda(),
                     reward.squeeze().cuda(), done.squeeze().cuda())
@@ -113,16 +119,16 @@ class Mario:
             return state, next_state, action.squeeze(), reward.squeeze(), done.squeeze()
 
     def td_estimate(self, state, action):
-        current_q = self.net(state, model="online")[
+        current_q = self.net(state, model="online", ignore_front=True)[0][
             np.arange(0, self.batch_size), action
         ]  # Q_online(s,a)
         return current_q
 
     @torch.no_grad()
     def td_target(self, reward, next_state, done):
-        next_state_q = self.net(next_state, model="online")
+        next_state_q, _ = self.net(next_state, model="online", ignore_front=True)
         best_action = torch.argmax(next_state_q, dim=1)
-        next_q = self.net(next_state, model="target")[
+        next_q = self.net(next_state, model="target", ignore_front=True)[0][
             np.arange(0, self.batch_size), best_action
         ]
         return (reward + (1 - done.float()) * self.gamma * next_q).float()
