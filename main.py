@@ -16,14 +16,14 @@ def train(env):
     save_dir.mkdir(parents=True)
 
     mario = Mario(state_dim=(4, 84, 84), action_dim=env.action_space.n, save_dir=save_dir)
+    mario.load('checkpoints/2022-09-10T13-48-09/mario_net_5.chkpt')
 
     logger = MetricLogger(save_dir)
 
     episodes = 20000
     for e in range(episodes):
 
-        raw_state = env.reset()
-        state = mario.compose_state(raw_state)
+        state = env.reset()
 
         # Play the game!
         while True:
@@ -33,9 +33,7 @@ def train(env):
             action = mario.act(state)
 
             # Agent performs action
-            next_raw_state, reward, done, info = env.step(action)
-
-            next_state = mario.compose_state(next_raw_state)
+            next_state, reward, done, info = env.step(action)
 
             # Learn
             q, loss = mario.learn()
