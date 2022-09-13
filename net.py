@@ -2,6 +2,7 @@ import copy
 
 import torch
 from torch import nn
+from vit_pytorch import ViT
 
 
 class BaseNet(nn.Module):
@@ -15,26 +16,22 @@ class BaseNet(nn.Module):
             nn.ReLU(),
             nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1),
             nn.ReLU(),
-            nn.Flatten()
+            nn.Flatten(start_dim=2, end_dim=-1)
         )
 
-        self.a_back_bone = nn.Sequential(
-            nn.Linear(3136, 512),
-            nn.ReLU(),
-            nn.Linear(512, output_dim),
-        )
+        self.encoder_layer = nn.TransformerEncoderLayer(d_model=49, nhead=7, dropout=0, batch_first=True)
+        self.transformer_encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=6)
 
-        self.v_back_bone = nn.Sequential(
-            nn.Linear(3136, 512),
-            nn.ReLU(),
-            nn.Linear(512, 1),
+        self.a_front = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(3136, output_dim)
         )
 
     def forward(self, input):
         front_t = self.front_bone(input)
-        a_t: torch.Tensor = self.a_back_bone(front_t)
-        v_t = self.v_back_bone(front_t)
-        return a_t + v_t - torch.mean(a_t, dim=-1, keepdim=True)
+        transformer_encoder_t = self.transformer_encoder(front_t)
+        a_t: torch.Tensor = self.a_front(transformer_encoder_t)
+        return a_t
 
 
 class MarioNet(nn.Module):
