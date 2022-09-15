@@ -6,7 +6,7 @@ import torch
 
 import environment
 import master_buffer
-from net import MarioNet
+from net import ActorNet, CriticNet
 
 
 class Mario:
@@ -18,11 +18,13 @@ class Mario:
         self.use_cuda = torch.cuda.is_available()
 
         # Mario's DNN to predict the most optimal action - we implement this in the Learn section
-        self.net = MarioNet(self.state_dim, self.action_dim).float()
+        self.critic_net = CriticNet(self.state_dim, self.action_dim).float()
+        self.actor_net = ActorNet(self.state_dim, self.action_dim).float()
         if self.use_cuda:
-            self.net = self.net.to(device=torch.device('cuda'))
+            self.critic_net = self.critic_net.to(device=torch.device('cuda'))
+            self.actor_net = self.actor_net.to(device=torch.device('cuda'))
 
-        self.exploration_rate = 0.5
+        self.exploration_rate = 1
         self.exploration_rate_decay = 0.99999975
         self.exploration_rate_min = 0.05
         self.curr_step = 0
@@ -32,16 +34,19 @@ class Mario:
         self.batch_size = 32
 
         # load master buffer memory
-        self.master_memory = master_buffer.load('/Users/admin/PycharmProjects/SuperMario/master_buffer_files')
+        self.master_memory = master_buffer.load('/home/wikeex/PycharmProjects/SuperMario/master_buffer_files')
 
         self.gamma = 0.9
 
-        self.optimizer = torch.optim.Adam(self.net.parameters(), lr=0.00025)
+        self.critic_optimizer = torch.optim.Adam(self.critic_net.parameters(), lr=0.00025)
+        self.actor_optimizer = torch.optim.Adam(self.actor_net.parameters(), lr=0.00025)
         self.loss_fn = torch.nn.SmoothL1Loss()
 
-        self.burnin = 5e3  # min. experiences before training
-        self.learn_every = 1  # no. of experiences between updates to Q_online
+        self.burnin = 1e4  # min. experiences before training
+        self.learn_every = 3  # no. of experiences between updates to Q_online
         self.sync_every = 1e4  # no. of experiences between Q_target & Q_online sync
+
+        self.tau = 0.02
 
         self.loss_sum = 0
 
@@ -56,7 +61,11 @@ class Mario:
         """
         # EXPLORE
         if np.random.rand() < self.exploration_rate:
-            action_idx = np.random.randint(self.action_dim)
+            action_values = 1 - np.random.random((1, self.action_dim))
+            if self.use_cuda:
+                action_values = torch.tensor(action_values, dtype=torch.float32).cuda()
+            else:
+                action_values = torch.tensor(action_values, dtype=torch.float32)
 
         # EXPLOIT
         else:
@@ -66,8 +75,7 @@ class Mario:
             else:
                 state = torch.tensor(state)
             state = state.unsqueeze(0)
-            action_values = self.net(state, model="online")
-            action_idx = torch.argmax(action_values, dim=1).item()
+            action_values = self.actor_net(state, model="online").detach()
 
         # decrease exploration_rate
         self.exploration_rate *= self.exploration_rate_decay
@@ -75,7 +83,7 @@ class Mario:
 
         # increment step
         self.curr_step += 1
-        return action_idx
+        return action_values
 
     def cache(self, state, next_state, action, reward, done, loss):
         """
@@ -94,72 +102,82 @@ class Mario:
         if self.use_cuda:
             state = torch.tensor(state).cuda()
             next_state = torch.tensor(next_state).cuda()
-            action = torch.tensor([action]).cuda()
             reward = torch.tensor([reward]).cuda()
             done = torch.tensor([done]).cuda()
         else:
             state = torch.tensor(state)
             next_state = torch.tensor(next_state)
-            action = torch.tensor([action])
             reward = torch.tensor([reward])
             done = torch.tensor([done])
 
-        if self.curr_step < self.burnin:
-            self.memory.append((state, next_state, action, reward, done,))
-        else:
-            self.loss_sum += loss
-            if loss > self.loss_sum / self.curr_step:
-                self.memory.append((state, next_state, action, reward, done,))
+        self.memory.append((state, next_state, action, reward, done,))
+        # if self.curr_step < self.burnin:
+        #     self.memory.append((state, next_state, action, reward, done,))
+        # else:
+        #     self.loss_sum += loss
+        #     if loss > self.loss_sum / self.curr_step:
+        #         self.memory.append((state, next_state, action, reward, done,))
 
     def recall(self):
         """
         Retrieve a batch of experiences from memory
         """
-        if random.randint(0, 9) in range(0, 5):
+        if random.randint(0, 9) in range(0, 10):
             batch = random.sample(self.memory, self.batch_size)
         else:
             batch = random.sample(self.master_memory, self.batch_size)
         state, next_state, action, reward, done = map(torch.stack, zip(*batch))
         return state, next_state, action.squeeze(), reward.squeeze(), done.squeeze()
 
-    def td_estimate(self, state, action):
-        current_q = self.net(state, model="online")[
-            np.arange(0, self.batch_size), action
-        ]  # Q_online(s,a)
-        return current_q
-
     @torch.no_grad()
-    def td_target(self, reward, next_state, done):
-        next_state_q = self.net(next_state, model="online")
-        best_action = torch.argmax(next_state_q, dim=1)
-        next_q = self.net(next_state, model="target")[
-            np.arange(0, self.batch_size), best_action
-        ]
-        return (reward + (1 - done.float()) * self.gamma * next_q).float()
+    def td_target(self, reward, next_state):
+        next_action = self.actor_net(next_state, model="target")
+        next_q = self.critic_net(next_state, next_action, model="target")
 
-    def update_q_online(self, td_estimate, td_target):
-        loss = self.loss_fn(td_estimate, td_target)
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
-        return loss.item()
+        return (reward.unsqueeze(-1) + self.gamma * next_q).float()
 
-    def sync_q_target(self):
-        self.net.target.load_state_dict(self.net.online.state_dict())
+    @staticmethod
+    def sync_target(net, tau):
+        for target_param, online_param in zip(net.target.parameters(), net.online.parameters()):
+            target_param.data.copy_(target_param.data * (1.0 - tau) + online_param.data * tau)
 
     def save(self):
         save_path = (
                 self.save_dir / f"mario_net_{int(self.curr_step // self.save_every)}.chkpt"
         )
         torch.save(
-            dict(model=self.net.state_dict(), exploration_rate=self.exploration_rate),
+            dict(model=self.critic_net.state_dict(), exploration_rate=self.exploration_rate),
             save_path,
         )
         print(f"MarioNet saved to {save_path} at step {self.curr_step}")
 
+    def critic_learn(self, state, next_state, action, reward):
+
+        # Get TD Estimate
+        td_est = self.critic_net(state, action, model="online")
+
+        # Get TD Target
+        td_tgt = self.td_target(reward, next_state)
+
+        # Back propagate loss through Q_online
+        critic_loss = self.loss_fn(td_tgt, td_est)
+        self.critic_optimizer.zero_grad()
+
+        critic_loss.backward()
+        self.critic_optimizer.step()
+
+        return td_est.mean().item(), critic_loss.item()
+
+    def actor_learn(self, state):
+        actor_loss = -torch.mean(self.critic_net(state, self.actor_net(state, model="online"), model="online"))
+        self.actor_optimizer.zero_grad()
+        actor_loss.backward()
+        self.actor_optimizer.step()
+
     def learn(self):
         if self.curr_step % self.sync_every == 0:
-            self.sync_q_target()
+            self.sync_target(self.critic_net, self.tau)
+            self.sync_target(self.actor_net, self.tau)
 
         if self.curr_step % self.save_every == 0:
             self.save()
@@ -173,13 +191,8 @@ class Mario:
         # Sample from memory
         state, next_state, action, reward, done = self.recall()
 
-        # Get TD Estimate
-        td_est = self.td_estimate(state, action)
+        self.actor_learn(state)
+        q, loss = self.critic_learn(state, next_state, action, reward)
 
-        # Get TD Target
-        td_tgt = self.td_target(reward, next_state, done)
+        return q, loss
 
-        # Back propagate loss through Q_online
-        loss = self.update_q_online(td_est, td_tgt)
-
-        return td_est.mean().item(), loss

@@ -29,10 +29,11 @@ def train(env):
             env.render()
 
             # Run agent on the state
-            action = mario.act(state)
+            action_values = mario.act(state)
 
+            action_idx = torch.argmax(action_values, dim=1).item()
             # Agent performs action
-            next_state, reward, done, info = env.step(action)
+            next_state, reward, done, info = env.step(action_idx)
 
             # Learn
             q, loss = mario.learn()
@@ -41,7 +42,7 @@ def train(env):
             logger.log_step(reward, loss, q)
 
             # Remember, 当loss值大于本批次平均loss值才去缓存，变相实现优先经验回放
-            mario.cache(state, next_state, action, reward, done, loss)
+            mario.cache(state, next_state, action_values, reward, done, loss)
 
             # Update state
             state = next_state
