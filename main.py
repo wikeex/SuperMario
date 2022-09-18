@@ -35,6 +35,7 @@ def train(env):
             next_state, reward, done, info = env.step(action)
 
             # Learn
+            mario.vision_learn(torch.tensor(state.__array__()))
             q, loss = mario.learn()
 
             # Logging

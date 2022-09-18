@@ -6,7 +6,7 @@ import torch
 
 import environment
 import master_buffer
-from net import MarioNet
+from net import MarioNet, BaseNet
 
 
 class Mario:
@@ -18,9 +18,11 @@ class Mario:
         self.use_cuda = torch.cuda.is_available()
 
         # Mario's DNN to predict the most optimal action - we implement this in the Learn section
+        self.vision_net = BaseNet(self.state_dim).float()
         self.net = MarioNet(self.state_dim, self.action_dim).float()
         if self.use_cuda:
             self.net = self.net.to(device=torch.device('cuda'))
+            self.vision_net = self.vision_net.to(device=torch.device('cuda'))
 
         self.exploration_rate = 0.5
         self.exploration_rate_decay = 0.99999975
@@ -39,9 +41,13 @@ class Mario:
         self.optimizer = torch.optim.Adam(self.net.parameters(), lr=0.00025)
         self.loss_fn = torch.nn.SmoothL1Loss()
 
+        self.vision_loss_fn = torch.nn.MSELoss(reduction='none')
+        self.vision_optimizer = torch.optim.Adam(self.vision_net.parameters(), lr=1e-3)
+
         self.burnin = 5e3  # min. experiences before training
         self.learn_every = 1  # no. of experiences between updates to Q_online
         self.sync_every = 1e4  # no. of experiences between Q_target & Q_online sync
+        self.sync_vision = 1e3
 
         self.loss_sum = 0
 
@@ -157,12 +163,26 @@ class Mario:
         )
         print(f"MarioNet saved to {save_path} at step {self.curr_step}")
 
+    def vision_learn(self, state):
+        pred = self.vision_net(state, is_training=True)
+        state, _ = torch.max(state, dim=0)
+        state = state.unsqueeze(0)
+        loss = self.vision_loss_fn(pred, state)
+
+        # Backpropagation
+        self.vision_optimizer.zero_grad()
+        loss.backward(gradient=torch.ones_like(loss))
+        self.vision_optimizer.step()
+
     def learn(self):
         if self.curr_step % self.sync_every == 0:
             self.sync_q_target()
 
         if self.curr_step % self.save_every == 0:
             self.save()
+
+        if self.curr_step % self.sync_vision == 0:
+            self.net.vision_bone.load_state_dict(self.vision_net.state_dict())
 
         if self.curr_step < self.burnin:
             return None, None
