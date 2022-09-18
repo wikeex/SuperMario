@@ -2,61 +2,101 @@ import datetime
 from pathlib import Path
 
 import torch
+from matplotlib import pyplot as plt
 
-from environment import init_env
-from mlog import MetricLogger
-from mario import Mario
+from torchvision import datasets
+from torchvision.transforms import ToTensor
+from torch.utils.data import DataLoader
+from torch import nn
+from net import NeuralNetwork
 
-use_cuda = torch.cuda.is_available()
-print(f"Using CUDA: {use_cuda}")
+
+device = "mps"
+print(f"Using {device} device")
+
+model = NeuralNetwork().to(device)
 
 
-def train(env):
-    save_dir = Path("checkpoints") / datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
-    save_dir.mkdir(parents=True)
+# Download training data from open datasets.
+training_data = datasets.FashionMNIST(
+    root="data",
+    train=True,
+    download=True,
+    transform=ToTensor(),
+)
 
-    mario = Mario(state_dim=(4, 84, 84), action_dim=env.action_space.n, save_dir=save_dir)
+# Download test data from open datasets.
+test_data = datasets.FashionMNIST(
+    root="data",
+    train=False,
+    download=True,
+    transform=ToTensor(),
+)
 
-    logger = MetricLogger(save_dir)
 
-    episodes = 10000
-    for e in range(episodes):
+def show(img):
+    plt.axis("off")
+    plt.imshow(img.squeeze(), cmap="gray")
+    plt.show()
 
-        state = env.reset()
 
-        # Play the game!
-        while True:
-            env.render()
+batch_size = 64
 
-            # Run agent on the state
-            action = mario.act(state)
+# Create data loaders.
+train_dataloader = DataLoader(training_data, batch_size=batch_size)
+test_dataloader = DataLoader(test_data, batch_size=batch_size)
 
-            # Agent performs action
-            next_state, reward, done, info = env.step(action)
+for X, y in test_dataloader:
+    print(f"Shape of X [N, C, H, W]: {X.shape}")
+    print(f"Shape of y: {y.shape} {y.dtype}")
+    break
 
-            # Learn
-            q, loss = mario.learn()
 
-            # Logging
-            logger.log_step(reward, loss, q)
+loss_fn = nn.MSELoss(reduction='none')
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
-            # Remember, 当loss值大于本批次平均loss值才去缓存，变相实现优先经验回放
-            mario.cache(state, next_state, action, reward, done, loss)
 
-            # Update state
-            state = next_state
+def train(dataloader, model, loss_fn, optimizer):
+    size = len(dataloader.dataset)
+    model.train()
+    for batch, (X, y) in enumerate(dataloader):
+        X, y = X.to(device), X.to(device)
 
-            # Check if end of game
-            if done or info["flag_get"]:
-                break
+        # Compute prediction error
+        pred = model(X)
+        loss = loss_fn(pred, y)
 
-        if mario.curr_step > mario.burnin:
-            logger.log_episode()
+        # Backpropagation
+        optimizer.zero_grad()
+        loss.backward(gradient=torch.ones_like(loss))
+        optimizer.step()
 
-            if e % 20 == 0:
-                logger.record(episode=e, epsilon=mario.exploration_rate, step=mario.curr_step)
+        if batch % 100 == 0:
+            loss, current = loss.mean().item(), batch * len(X)
+            print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
+
+
+def test(dataloader, model, loss_fn):
+    size = len(dataloader.dataset)
+    num_batches = len(dataloader)
+    model.eval()
+    test_loss = 0
+    with torch.no_grad():
+        for X, y in dataloader:
+            X, y = X.to(device), X.to(device)
+            pred = model(X)
+            test_loss += loss_fn(pred, y).mean(1).mean(1).mean().item()
+        show(X[-1].to('cpu'))
+        show(pred[-1].to('cpu'))
+    test_loss /= num_batches
+    print(f"Test Error: \n , Avg loss: {test_loss:>8f} \n")
 
 
 if __name__ == '__main__':
-    custom_env = init_env()
-    train(custom_env)
+
+    epochs = 5
+    for t in range(epochs):
+        print(f"Epoch {t+1}\n-------------------------------")
+        train(train_dataloader, model, loss_fn, optimizer)
+        test(test_dataloader, model, loss_fn)
+    print("Done!")
