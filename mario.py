@@ -7,6 +7,7 @@ import torch
 import environment
 import master_buffer
 from net import ActorNet, CriticNet
+from utils import device
 
 
 class Mario:
@@ -15,15 +16,13 @@ class Mario:
         self.action_dim = action_dim
         self.save_dir = save_dir
 
-        self.use_cuda = torch.cuda.is_available()
+        self.device = device()
 
         # Mario's DNN to predict the most optimal action - we implement this in the Learn section
-        self.critic_net = CriticNet(self.state_dim, self.action_dim).float()
-        self.actor_net = ActorNet(self.state_dim, self.action_dim).float()
-        if self.use_cuda:
-            self.critic_net = self.critic_net.to(device=torch.device('cuda'))
-            self.actor_net = self.actor_net.to(device=torch.device('cuda'))
-
+        self.critic = CriticNet(self.state_dim, self.action_dim).float()
+        self.actor = ActorNet(self.state_dim, self.action_dim).float()
+        self.critic = self.critic.to(device=self.device)
+        self.actor = self.actor.to(device=self.device)
         self.exploration_rate = 1
         self.exploration_rate_decay = 0.99999975
         self.exploration_rate_min = 0.05
@@ -34,12 +33,13 @@ class Mario:
         self.batch_size = 32
 
         # load master buffer memory
-        self.master_memory = master_buffer.load('/home/wikeex/PycharmProjects/SuperMario/master_buffer_files')
+        # TODO: 文件路径改成配置
+        self.master_memory = master_buffer.load('/Users/admin/PycharmProjects/SuperMario/master_buffer_files')
 
         self.gamma = 0.9
 
-        self.critic_optimizer = torch.optim.Adam(self.critic_net.parameters(), lr=0.00025)
-        self.actor_optimizer = torch.optim.Adam(self.actor_net.parameters(), lr=0.00025)
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=0.00025)
+        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=0.00025)
         self.loss_fn = torch.nn.SmoothL1Loss()
 
         self.burnin = 1e4  # min. experiences before training
@@ -62,20 +62,14 @@ class Mario:
         # EXPLORE
         if np.random.rand() < self.exploration_rate:
             action_values = 1 - np.random.random((1, self.action_dim))
-            if self.use_cuda:
-                action_values = torch.tensor(action_values, dtype=torch.float32).cuda()
-            else:
-                action_values = torch.tensor(action_values, dtype=torch.float32)
+            action_values = torch.tensor(action_values, dtype=torch.float32).to(device=self.device)
 
         # EXPLOIT
         else:
             state = state.__array__()
-            if self.use_cuda:
-                state = torch.tensor(state).cuda()
-            else:
-                state = torch.tensor(state)
+            state = torch.tensor(state).to(device=self.device)
             state = state.unsqueeze(0)
-            action_values = self.actor_net(state, model="online").detach()
+            action_values = self.actor(state, model="online").detach()
 
         # decrease exploration_rate
         self.exploration_rate *= self.exploration_rate_decay
@@ -99,16 +93,10 @@ class Mario:
         state = state.__array__()
         next_state = next_state.__array__()
 
-        if self.use_cuda:
-            state = torch.tensor(state).cuda()
-            next_state = torch.tensor(next_state).cuda()
-            reward = torch.tensor([reward]).cuda()
-            done = torch.tensor([done]).cuda()
-        else:
-            state = torch.tensor(state)
-            next_state = torch.tensor(next_state)
-            reward = torch.tensor([reward])
-            done = torch.tensor([done])
+        state = torch.tensor(state).to(device=self.device)
+        next_state = torch.tensor(next_state).to(device=self.device)
+        reward = torch.tensor([reward]).to(device=self.device)
+        done = torch.tensor([done]).to(device=self.device)
 
         self.memory.append((state, next_state, action, reward, done,))
         # if self.curr_step < self.burnin:
@@ -131,8 +119,8 @@ class Mario:
 
     @torch.no_grad()
     def td_target(self, reward, next_state):
-        next_action = self.actor_net(next_state, model="target")
-        next_q = self.critic_net(next_state, next_action, model="target")
+        next_action = self.actor(next_state, model="target")
+        next_q = self.critic(next_state, next_action, model="target")
 
         return (reward.unsqueeze(-1) + self.gamma * next_q).float()
 
@@ -146,7 +134,7 @@ class Mario:
                 self.save_dir / f"mario_net_{int(self.curr_step // self.save_every)}.chkpt"
         )
         torch.save(
-            dict(model=self.critic_net.state_dict(), exploration_rate=self.exploration_rate),
+            dict(model=self.critic.state_dict(), exploration_rate=self.exploration_rate),
             save_path,
         )
         print(f"MarioNet saved to {save_path} at step {self.curr_step}")
@@ -154,7 +142,7 @@ class Mario:
     def critic_learn(self, state, next_state, action, reward):
 
         # Get TD Estimate
-        td_est = self.critic_net(state, action, model="online")
+        td_est = self.critic(state, action, model="online")
 
         # Get TD Target
         td_tgt = self.td_target(reward, next_state)
@@ -169,15 +157,15 @@ class Mario:
         return td_est.mean().item(), critic_loss.item()
 
     def actor_learn(self, state):
-        actor_loss = -torch.mean(self.critic_net(state, self.actor_net(state, model="online"), model="online"))
+        actor_loss = -torch.mean(self.critic(state, self.actor(state, model="online"), model="online"))
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.actor_optimizer.step()
 
     def learn(self):
         if self.curr_step % self.sync_every == 0:
-            self.sync_target(self.critic_net, self.tau)
-            self.sync_target(self.actor_net, self.tau)
+            self.sync_target(self.critic, self.tau)
+            self.sync_target(self.actor, self.tau)
 
         if self.curr_step % self.save_every == 0:
             self.save()

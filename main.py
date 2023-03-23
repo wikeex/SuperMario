@@ -6,9 +6,9 @@ import torch
 from environment import init_env
 from mlog import MetricLogger
 from mario import Mario
+from utils import device
 
-use_cuda = torch.cuda.is_available()
-print(f"Using CUDA: {use_cuda}")
+print(f"Using device: {device()}")
 
 
 def train(env):
