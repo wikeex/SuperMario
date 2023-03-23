@@ -31,7 +31,7 @@ class Mario:
         self.batch_size = 64
 
         # load master buffer memory
-        self.master_memory = master_buffer.load('./master_buffer_224*224')
+        self.master_memory = master_buffer.load('./master_buffer_files')
 
         self.gamma = 0.98
 

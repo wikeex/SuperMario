@@ -120,3 +120,4 @@ activate
 *.ini
 checkpoints/
 master_buffer*/
+data/
