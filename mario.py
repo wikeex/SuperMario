@@ -24,7 +24,7 @@ class Mario:
             self.critic_net = self.critic_net.to(device=torch.device('cuda'))
             self.actor_net = self.actor_net.to(device=torch.device('cuda'))
 
-        self.exploration_rate = 0.5
+        self.exploration_rate = 1
         self.exploration_rate_decay = 0.99999975
         self.exploration_rate_min = 0.05
         self.curr_step = 0
@@ -146,10 +146,18 @@ class Mario:
                 self.save_dir / f"mario_net_{int(self.curr_step // self.save_every)}.chkpt"
         )
         torch.save(
-            dict(model=self.critic_net.state_dict(), exploration_rate=self.exploration_rate),
+            dict(critic_model=self.critic_net.state_dict(), actor_model=self.actor_net.state_dict(),
+                 exploration_rate=self.exploration_rate),
             save_path,
         )
         print(f"MarioNet saved to {save_path} at step {self.curr_step}")
+
+    def load(self, filepath):
+        print(f"Load Mario net model from {filepath}")
+        checkpoint = torch.load(filepath)
+        self.critic_net.load_state_dict(checkpoint['critic_model'])
+        self.actor_net.load_state_dict(checkpoint['actor_model'])
+        self.exploration_rate = checkpoint['exploration_rate']
 
     def critic_learn(self, state, next_state, action, reward):
 
@@ -195,4 +203,3 @@ class Mario:
         q, loss = self.critic_learn(state, next_state, action, reward)
 
         return q, loss
-
