@@ -6,6 +6,7 @@ from torchvision import transforms as T
 import gym
 import numpy as np
 import torch
+from gym_super_mario_bros.actions import SIMPLE_MOVEMENT, COMPLEX_MOVEMENT
 
 
 custom_space = [
@@ -77,7 +78,7 @@ class ResizeObservation(gym.ObservationWrapper):
 
 def init_env():
     env = gym_super_mario_bros.make("SuperMarioBros-1-1-v0")
-    env = JoypadSpace(env, custom_space)
+    env = JoypadSpace(env, SIMPLE_MOVEMENT)
 
     env = SkipFrame(env, skip=4)
     env = GrayScaleObservation(env)

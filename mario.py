@@ -24,7 +24,7 @@ class Mario:
             self.critic_net = self.critic_net.to(device=torch.device('cuda'))
             self.actor_net = self.actor_net.to(device=torch.device('cuda'))
 
-        self.exploration_rate = 1
+        self.exploration_rate = 0.5
         self.exploration_rate_decay = 0.99999975
         self.exploration_rate_min = 0.05
         self.curr_step = 0
