@@ -54,13 +54,13 @@ class BaseCritic(nn.Module):
         self.state = nn.Linear(3136, 256)
 
         self.action = nn.Linear(action_dim, 256)
-        self.q = nn.Linear(256, 1)
+        self.q = nn.Linear(256 + action_dim, 1)
 
     def forward(self, state, action):
         back_bone_t = self.back_bone(state)
         state_t = self.state(back_bone_t)
-        action_t = self.action(action)
-        return self.q(torch.relu(state_t+action_t))
+        # action_t = self.action(action)
+        return self.q(torch.relu(torch.cat([state_t, action], dim=1)))
 
 
 class CriticNet(nn.Module):
