@@ -16,7 +16,7 @@ def train(env):
     save_dir.mkdir(parents=True)
 
     mario = Mario(state_dim=(4, 84, 84), action_dim=env.action_space.n, save_dir=save_dir)
-    mario.load('checkpoints/2023-03-28T09-20-38/mario_net_3.chkpt')
+    # mario.load('checkpoints/2023-03-28T09-20-38/mario_net_3.chkpt')
     logger = MetricLogger(save_dir)
 
     episodes = 10000

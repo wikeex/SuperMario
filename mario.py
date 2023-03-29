@@ -38,9 +38,9 @@ class Mario:
 
         self.gamma = 0.9
 
-        self.critic_optimizer = torch.optim.Adam(self.critic_net.parameters(), lr=0.00025)
-        self.actor_optimizer = torch.optim.Adam(self.actor_net.parameters(), lr=0.00025)
-        self.loss_fn = torch.nn.SmoothL1Loss()
+        self.critic_optimizer = torch.optim.Adam(self.critic_net.parameters(), lr=0.001)
+        self.actor_optimizer = torch.optim.Adam(self.actor_net.parameters(), lr=0.001)
+        self.loss_fn = torch.nn.MSELoss()
 
         self.burnin = 1e4  # min. experiences before training
         self.learn_every = 3  # no. of experiences between updates to Q_online
