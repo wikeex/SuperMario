@@ -22,7 +22,7 @@ class Mario:
         if self.use_cuda:
             self.net = self.net.to(device=torch.device('cuda'))
 
-        self.exploration_rate = 0.5
+        self.exploration_rate = 1
         self.exploration_rate_decay = 0.99999975
         self.exploration_rate_min = 0.05
         self.curr_step = 0

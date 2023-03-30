@@ -19,7 +19,7 @@ def train(env):
 
     logger = MetricLogger(save_dir)
 
-    episodes = 10000
+    episodes = 20000
     for e in range(episodes):
 
         state = env.reset()
