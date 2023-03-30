@@ -54,7 +54,7 @@ def train(env):
             logger.log_episode()
 
             if e % 20 == 0:
-                logger.record(episode=e, epsilon=mario.exploration_rate, step=mario.curr_step)
+                logger.record(episode=e, step=mario.curr_step)
 
 
 if __name__ == '__main__':
