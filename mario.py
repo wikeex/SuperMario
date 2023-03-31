@@ -7,6 +7,7 @@ import torch
 import master_buffer
 from master_buffer import mario_params_to_tensors
 from net import MarioNet
+from config import STEP_COUNT
 
 
 class Mario:
@@ -32,7 +33,7 @@ class Mario:
         self.batch_size = 32
 
         # load master buffer memory
-        self.master_memory = master_buffer.load('./master_buffer_files')
+        # self.master_memory = master_buffer.load('./master_buffer_files')
 
         self.gamma = 0.9
 
@@ -44,6 +45,7 @@ class Mario:
         self.sync_every = 1e4  # no. of experiences between Q_target & Q_online sync
 
         self.loss_sum = 0
+        self.step_count = STEP_COUNT
 
     def act(self, state):
         """
@@ -77,7 +79,7 @@ class Mario:
         self.curr_step += 1
         return action_idx
 
-    def cache(self, state, next_state, action, reward, done, loss):
+    def cache(self, steps: tuple, loss: float):
         """
         Store the experience to self.memory (replay buffer)
 
@@ -88,44 +90,47 @@ class Mario:
         reward (float),
         done(bool))
         """
-        state, next_state, action, reward, done = mario_params_to_tensors(state, next_state, action, reward, done)
+        steps = mario_params_to_tensors(steps)
 
         if self.curr_step < self.burnin:
-            self.memory.append((state, next_state, action, reward, done,))
+            self.memory.append(steps)
         else:
             self.loss_sum += loss
             if loss > self.loss_sum / self.curr_step:
-                self.memory.append((state, next_state, action, reward, done,))
+                self.memory.append(steps)
 
     def recall(self):
         """
         Retrieve a batch of experiences from memory
         """
-        if random.randint(0, 9) in range(0, 5):
+        if random.randint(0, 9) in range(0, 10):
             batch = random.sample(self.memory, self.batch_size)
         else:
             batch = random.sample(self.master_memory, self.batch_size)
-        state, next_state, action, reward, done = map(torch.stack, zip(*batch))
+        steps = map(torch.stack, zip(*batch))
         if self.use_cuda:
-            return (state.cuda(), next_state.cuda(), action.squeeze().cuda(),
-                    reward.squeeze().cuda(), done.squeeze().cuda())
+            return [item.cuda() if i % 5 in (0, 1) else item.squeeze().cuda() for i, item in enumerate(steps) if item is not None]
         else:
-            return state, next_state, action.squeeze(), reward.squeeze(), done.squeeze()
+            return [item if i % 5 in (0, 1) else item.squeeze() for i, item in enumerate(steps) if item is not None]
 
-    def td_estimate(self, state, action):
-        current_q = self.net(state, model="online")[
-            np.arange(0, self.batch_size), action
+    def td_estimate(self, steps):
+        current_q = self.net(steps[-5], model="online")[
+            np.arange(0, self.batch_size), steps[-3]
         ]  # Q_online(s,a)
         return current_q
 
     @torch.no_grad()
-    def td_target(self, reward, next_state, done):
-        next_state_q = self.net(next_state, model="online")
+    def td_target(self, steps):
+        next_state_q = self.net(steps[-4], model="online")
         best_action = torch.argmax(next_state_q, dim=1)
-        next_q = self.net(next_state, model="target")[
+        next_q = self.net(steps[-4], model="target")[
             np.arange(0, self.batch_size), best_action
         ]
-        return (reward + (1 - done.float()) * self.gamma * next_q).float()
+        total_reward = 0
+        for i, item in enumerate(steps[:-5]):
+            if i % 5 == 3:
+                total_reward = item * self.gamma ** (i / 5 + 1) + total_reward
+        return (total_reward + (1 - steps[-1].float()) * self.gamma ** self.step_count * next_q).float()
 
     def update_q_online(self, td_estimate, td_target):
         loss = self.loss_fn(td_estimate, td_target)
@@ -161,13 +166,13 @@ class Mario:
             return None, None
 
         # Sample from memory
-        state, next_state, action, reward, done = self.recall()
+        steps = self.recall()
 
         # Get TD Estimate
-        td_est = self.td_estimate(state, action)
+        td_est = self.td_estimate(steps)
 
         # Get TD Target
-        td_tgt = self.td_target(reward, next_state, done)
+        td_tgt = self.td_target(steps)
 
         # Back propagate loss through Q_online
         loss = self.update_q_online(td_est, td_tgt)

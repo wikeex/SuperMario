@@ -1,3 +1,4 @@
+import copy
 import datetime
 import os
 import pickle
@@ -11,6 +12,7 @@ from nes_py.wrappers import JoypadSpace
 from pynput.keyboard import Listener
 
 from environment import SkipFrame, GrayScaleObservation, ResizeObservation, custom_space
+from config import STEP_COUNT
 
 locker = Lock()
 current_press_keys = set()
@@ -47,20 +49,22 @@ def on_release(key):
         return
 
 
-def mario_params_to_tensors(state, next_state, action, reward, done):
-    state = state.__array__()
-    next_state = next_state.__array__()
+def mario_params_to_tensors(steps):
+    tensor_steps = []
+    for index, item in enumerate(steps):
+        if item is None:
+            tensor_steps.append(item)
+            continue
+        if index % 5 == 0 or index % 5 == 1:
+            tensor_steps.append(torch.tensor(item.__array__()))
+        else:
+            tensor_steps.append(torch.tensor([item]))
 
-    state = torch.tensor(state)
-    next_state = torch.tensor(next_state)
-    action = torch.tensor([action])
-    reward = torch.tensor([reward])
-    done = torch.tensor([done])
-    return state, next_state, action, reward, done
+    return tuple(tensor_steps)
 
 
-def cache(state, next_state, action, reward, done):
-    Cache.append(mario_params_to_tensors(state, next_state, action, reward, done))
+def cache(steps):
+    Cache.append(mario_params_to_tensors(steps))
 
 
 def save(filename):
@@ -89,6 +93,7 @@ def play():
     env = FrameStack(env, num_stack=4)
 
     state = env.reset()
+    steps = []
     while True:
         env.render()
 
@@ -97,7 +102,10 @@ def play():
         locker.release()
 
         next_state, reward, done, info = env.step(action)
-        cache(state, next_state, action, reward, done)
+        steps.extend((state, next_state, reward, done, info))
+        if len(steps) / 5 == STEP_COUNT:
+            cache(copy.deepcopy(steps))
+            steps.clear()
         state = next_state
 
         if info['flag_get']:

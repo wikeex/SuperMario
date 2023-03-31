@@ -1,3 +1,4 @@
+import copy
 import datetime
 from pathlib import Path
 
@@ -23,6 +24,7 @@ def train(env):
     for e in range(episodes):
 
         state = env.reset()
+        cache_steps = []
 
         # Play the game!
         while True:
@@ -41,7 +43,10 @@ def train(env):
             logger.log_step(reward, loss, q)
 
             # Remember, 当loss值大于本批次平均loss值才去缓存，变相实现优先经验回放
-            mario.cache(state, next_state, action, reward, done, loss)
+            cache_steps.extend((state, next_state, action, reward, done))
+            if len(cache_steps) / 5 == mario.step_count:
+                mario.cache(tuple(copy.deepcopy(cache_steps)), loss)
+                cache_steps.clear()
 
             # Update state
             state = next_state
