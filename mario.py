@@ -7,6 +7,7 @@ import torch
 import master_buffer
 from master_buffer import mario_params_to_tensors
 from net import MarioNet
+from config import STEP_COUNT
 
 
 class Mario:
@@ -41,6 +42,7 @@ class Mario:
         self.sync_every = 1e4  # no. of experiences between Q_target & Q_online sync
 
         self.loss_sum = 0
+        self.step_count = STEP_COUNT
 
     def act(self, state):
         """
@@ -65,7 +67,7 @@ class Mario:
         self.curr_step += 1
         return action_idx
 
-    def cache(self, state, next_state, action, reward, done, loss):
+    def cache(self, states, next_state, actions, rewards, done, loss: float):
         """
         Store the experience to self.memory (replay buffer)
 
@@ -76,14 +78,18 @@ class Mario:
         reward (float),
         done(bool))
         """
-        state, next_state, action, reward, done = mario_params_to_tensors(state, next_state, action, reward, done)
+        total_reward = 0
+        for i, item in enumerate(rewards):
+            total_reward = item * self.gamma ** i + total_reward
+        state, next_state, action, reward, done = states[0], next_state, actions[0], total_reward, done
+        tao = mario_params_to_tensors(state, next_state, action, reward, done)
 
         if self.curr_step < self.burnin:
-            self.memory.append((state, next_state, action, reward, done,))
+            self.memory.append(tao)
         else:
             self.loss_sum += loss
-            if loss > self.loss_sum / self.curr_step:
-                self.memory.append((state, next_state, action, reward, done,))
+            if loss < self.loss_sum / self.curr_step:
+                self.memory.append(tao)
 
     def recall(self):
         """

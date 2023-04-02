@@ -1,8 +1,10 @@
 import datetime
+from collections import deque
 from pathlib import Path
 
 import torch
 
+from config import STEP_COUNT
 from environment import init_env
 from mlog import MetricLogger
 from mario import Mario
@@ -24,6 +26,10 @@ def train(env):
 
         state = env.reset()
 
+        rewards = deque(maxlen=STEP_COUNT)
+        states = deque(maxlen=STEP_COUNT)
+        actions = deque(maxlen=STEP_COUNT)
+
         # Play the game!
         while True:
             env.render()
@@ -41,7 +47,11 @@ def train(env):
             logger.log_step(reward, loss, q)
 
             # Remember, 当loss值大于本批次平均loss值才去缓存，变相实现优先经验回放
-            mario.cache(state, next_state, action, reward, done, loss)
+            states.append(state)
+            rewards.append(reward)
+            actions.append(action)
+            if len(rewards) == mario.step_count:
+                mario.cache(states, next_state, actions, rewards, done, loss)
 
             # Update state
             state = next_state
