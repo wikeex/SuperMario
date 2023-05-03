@@ -44,9 +44,6 @@ class BaseNet(nn.Module):
         self.front_bone = nn.Sequential(
             *(list(self.resnet18.children())[:-1]),
             nn.Flatten(),
-            nn.Linear(512, 512),
-            nn.ReLU(),
-            nn.Linear(512, output_dim),
         )
 
         self.a_back_bone = nn.Sequential(
