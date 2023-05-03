@@ -119,5 +119,6 @@ config/pro_config.ini
 activate
 *.ini
 checkpoints/
+master_buffer*/
 master_buffer_files/
 data/

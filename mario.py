@@ -4,6 +4,7 @@ from collections import deque
 import numpy as np
 import torch
 
+import environment
 import master_buffer
 from master_buffer import mario_params_to_tensors
 from net import MarioNet
@@ -25,12 +26,13 @@ class Mario:
 
         self.curr_step = 0
 
-        self.save_every = 1e5  # no. of experiences between saving Mario Net
-        self.memory = deque(maxlen=80000)
+        self.save_every = 5e5  # no. of experiences between saving Mario Net
+        self.memory = deque(maxlen=10000)
         self.batch_size = 32
 
         # load master buffer memory
-        self.master_memory = master_buffer.load('./master_buffer_files')
+        # self.master_memory = master_buffer.load('/home/wikeex/PycharmProjects/SuperMario/master_buffer_files')
+        self.master_memory = []
 
         self.gamma = 0.9
 
@@ -38,7 +40,7 @@ class Mario:
         self.loss_fn = torch.nn.SmoothL1Loss()
 
         self.burnin = 5e3  # min. experiences before training
-        self.learn_every = 1  # no. of experiences between updates to Q_online
+        self.learn_every = 3  # no. of experiences between updates to Q_online
         self.sync_every = 1e4  # no. of experiences between Q_target & Q_online sync
 
         self.loss_sum = 0
@@ -140,6 +142,11 @@ class Mario:
             save_path,
         )
         print(f"MarioNet saved to {save_path} at step {self.curr_step}")
+
+    def load(self, filepath):
+        print(f"Load Mario net model from {filepath}")
+        checkpoint = torch.load(filepath)
+        self.net.load_state_dict(checkpoint['model'])
 
     def learn(self):
         if self.curr_step % self.sync_every == 0:

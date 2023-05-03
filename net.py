@@ -1,5 +1,7 @@
 import torch
 import math
+import copy
+
 from torch import nn
 import torch.nn.functional as F
 
@@ -37,24 +39,24 @@ class BaseNet(nn.Module):
     def __init__(self, input_dim, output_dim):
         super().__init__()
         c, h, w = input_dim
+        self.resnet18 = models.resnet18(pretrained=True)
+
         self.front_bone = nn.Sequential(
-            nn.Conv2d(in_channels=c, out_channels=32, kernel_size=8, stride=4),
+            *(list(self.resnet18.children())[:-1]),
+            nn.Flatten(),
+            nn.Linear(512, 512),
             nn.ReLU(),
-            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=4, stride=2),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1),
-            nn.ReLU(),
-            nn.Flatten()
+            nn.Linear(512, output_dim),
         )
 
         self.a_back_bone = nn.Sequential(
-            NoisyFactorizedLinear(3136, 512),
+            NoisyFactorizedLinear(512, 512),
             nn.ReLU(),
             NoisyFactorizedLinear(512, output_dim),
         )
 
         self.v_back_bone = nn.Sequential(
-            NoisyFactorizedLinear(3136, 512),
+            NoisyFactorizedLinear(512, 512),
             nn.ReLU(),
             NoisyFactorizedLinear(512, 1),
         )
@@ -64,6 +66,7 @@ class BaseNet(nn.Module):
         a_t: torch.Tensor = self.a_back_bone(front_t)
         v_t = self.v_back_bone(front_t)
         return a_t + v_t - torch.mean(a_t, dim=-1, keepdim=True)
+from torchvision import models
 
 
 class MarioNet(nn.Module):

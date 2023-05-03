@@ -10,7 +10,7 @@ from gym.wrappers import FrameStack
 from nes_py.wrappers import JoypadSpace
 from pynput.keyboard import Listener
 
-from environment import SkipFrame, GrayScaleObservation, ResizeObservation, custom_space
+from environment import SkipFrame, GrayScaleObservation, ResizeObservation, custom_space, init_resnet18_env
 
 locker = Lock()
 current_press_keys = set()
@@ -81,12 +81,7 @@ def load(dirname):
 
 
 def play():
-    env = gym_super_mario_bros.make('SuperMarioBros-1-1-v0')
-    env = JoypadSpace(env, custom_space)
-    env = SkipFrame(env, skip=4)
-    env = GrayScaleObservation(env)
-    env = ResizeObservation(env, shape=84)
-    env = FrameStack(env, num_stack=4)
+    env = init_resnet18_env()
 
     state = env.reset()
     while True:
@@ -116,6 +111,7 @@ def play():
             break
         if done and not info['flag_get']:
             env.reset()
+            Cache.clear()
         time.sleep(0.044)
     env.close()
 

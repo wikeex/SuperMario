@@ -5,7 +5,7 @@ from pathlib import Path
 import torch
 
 from config import STEP_COUNT
-from environment import init_env
+from environment import init_resnet18_env
 from mlog import MetricLogger
 from mario import Mario
 
@@ -18,6 +18,7 @@ def train(env):
     save_dir.mkdir(parents=True)
 
     mario = Mario(state_dim=(4, 84, 84), action_dim=env.action_space.n, save_dir=save_dir)
+    mario.load('checkpoints/2022-09-10T13-48-09/mario_net_5.chkpt')
 
     logger = MetricLogger(save_dir)
 
@@ -68,5 +69,5 @@ def train(env):
 
 
 if __name__ == '__main__':
-    custom_env = init_env()
+    custom_env = init_resnet18_env()
     train(custom_env)
