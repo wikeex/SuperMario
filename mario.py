@@ -2,7 +2,6 @@ import random
 from collections import deque
 
 import numpy as np
-import torch
 from master_buffer import mario_params_to_tensors
 from net import MarioNet
 from config import *
@@ -88,7 +87,7 @@ class Mario:
         """
         Retrieve a batch of experiences from memory
         """
-        if random.randint(0, 9) in range(0, 9):
+        if random.randint(0, 9) in range(0, 10):
             batch = random.sample(self.memory, self.batch_size)
         else:
             batch = random.sample(self.master_memory, self.batch_size)
