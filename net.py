@@ -1,9 +1,9 @@
 import torch
 import math
-import copy
-
+from torchvision import models
 from torch import nn
 import torch.nn.functional as F
+from torchvision.models import ResNet18_Weights
 
 
 class NoisyFactorizedLinear(nn.Linear):
@@ -36,10 +36,9 @@ class NoisyFactorizedLinear(nn.Linear):
 
 
 class BaseNet(nn.Module):
-    def __init__(self, input_dim, output_dim):
+    def __init__(self, output_dim):
         super().__init__()
-        c, h, w = input_dim
-        self.resnet18 = models.resnet18(pretrained=True)
+        self.resnet18 = models.resnet18(weights=ResNet18_Weights.DEFAULT)
 
         self.front_bone = nn.Sequential(
             *(list(self.resnet18.children())[:-1]),
@@ -58,12 +57,12 @@ class BaseNet(nn.Module):
             NoisyFactorizedLinear(512, 1),
         )
 
-    def forward(self, input):
-        front_t = self.front_bone(input)
+    def forward(self, x):
+        with torch.no_grad():
+            front_t = self.front_bone(x)
         a_t: torch.Tensor = self.a_back_bone(front_t)
         v_t = self.v_back_bone(front_t)
         return a_t + v_t - torch.mean(a_t, dim=-1, keepdim=True)
-from torchvision import models
 
 
 class MarioNet(nn.Module):
@@ -80,15 +79,15 @@ class MarioNet(nn.Module):
         if w != 84:
             raise ValueError(f"Expecting input width: 84, got: {w}")
 
-        self.online = BaseNet(input_dim, output_dim)
-        self.target = BaseNet(input_dim, output_dim)
+        self.online = BaseNet(output_dim)
+        self.target = BaseNet(output_dim)
 
         # Q_target parameters are frozen.
         for p in self.target.parameters():
             p.requires_grad = False
 
-    def forward(self, input, model):
+    def forward(self, x, model):
         if model == "online":
-            return self.online(input)
+            return self.online(x)
         elif model == "target":
-            return self.target(input)
+            return self.target(x)
