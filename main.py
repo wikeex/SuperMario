@@ -2,15 +2,12 @@ import datetime
 from collections import deque
 from pathlib import Path
 
-import torch
-
-from config import STEP_COUNT
 from environment import init_resnet18_env
 from mlog import MetricLogger
 from mario import Mario
+from config import *
 
-use_cuda = torch.cuda.is_available()
-print(f"Using CUDA: {use_cuda}")
+print(f"Using device: {DEVICE}")
 
 
 def train(env):
@@ -33,7 +30,7 @@ def train(env):
 
         # Play the game!
         while True:
-            env.render()
+            # env.render()
 
             # Run agent on the state
             action = mario.act(state)

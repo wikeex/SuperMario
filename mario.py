@@ -3,12 +3,9 @@ from collections import deque
 
 import numpy as np
 import torch
-
-import environment
-import master_buffer
 from master_buffer import mario_params_to_tensors
 from net import MarioNet
-from config import STEP_COUNT
+from config import *
 
 
 class Mario:
@@ -17,12 +14,9 @@ class Mario:
         self.action_dim = action_dim
         self.save_dir = save_dir
 
-        self.use_cuda = torch.cuda.is_available()
-
         # Mario's DNN to predict the most optimal action - we implement this in the Learn section
         self.net = MarioNet(self.state_dim, self.action_dim).float()
-        if self.use_cuda:
-            self.net = self.net.to(device=torch.device('cuda'))
+        self.net = self.net.to(device=DEVICE)
 
         self.curr_step = 0
 
@@ -40,7 +34,7 @@ class Mario:
         self.loss_fn = torch.nn.SmoothL1Loss()
 
         self.burnin = 5e3  # min. experiences before training
-        self.learn_every = 3  # no. of experiences between updates to Q_online
+        self.learn_every = 1  # no. of experiences between updates to Q_online
         self.sync_every = 1e4  # no. of experiences between Q_target & Q_online sync
 
         self.loss_sum = 0
@@ -57,10 +51,7 @@ class Mario:
         """
 
         state = state.__array__()
-        if self.use_cuda:
-            state = torch.tensor(state).cuda()
-        else:
-            state = torch.tensor(state)
+        state = torch.tensor(state).to(device=DEVICE)
         state = state.unsqueeze(0)
         action_values = self.net(state, model="online")
         action_idx = torch.argmax(action_values, dim=1).item()
@@ -97,16 +88,14 @@ class Mario:
         """
         Retrieve a batch of experiences from memory
         """
-        if random.randint(0, 9) in range(0, 5):
+        if random.randint(0, 9) in range(0, 9):
             batch = random.sample(self.memory, self.batch_size)
         else:
             batch = random.sample(self.master_memory, self.batch_size)
         state, next_state, action, reward, done = map(torch.stack, zip(*batch))
-        if self.use_cuda:
-            return (state.cuda(), next_state.cuda(), action.squeeze().cuda(),
-                    reward.squeeze().cuda(), done.squeeze().cuda())
-        else:
-            return state, next_state, action.squeeze(), reward.squeeze(), done.squeeze()
+
+        return (state.to(device=DEVICE), next_state.to(device=DEVICE), action.squeeze().to(device=DEVICE),
+                reward.squeeze().to(device=DEVICE), done.squeeze().to(device=DEVICE))
 
     def td_estimate(self, state, action):
         current_q = self.net(state, model="online")[
