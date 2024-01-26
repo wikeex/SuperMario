@@ -1,6 +1,9 @@
+import os
 import random
 from collections import deque
-
+from datetime import datetime
+from pathlib import Path
+import re
 import numpy as np
 from master_buffer import mario_params_to_tensors
 from net import MarioNet
@@ -8,7 +11,7 @@ from config import *
 
 
 class Mario:
-    def __init__(self, state_dim, action_dim, save_dir):
+    def __init__(self, state_dim, action_dim, save_dir: Path):
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.save_dir = save_dir
@@ -19,7 +22,7 @@ class Mario:
 
         self.curr_step = 0
 
-        self.save_every = 5e5  # no. of experiences between saving Mario Net
+        self.save_every = 5e4  # no. of experiences between saving Mario Net
         self.memory = deque(maxlen=10000)
         self.batch_size = 32
 
@@ -122,9 +125,7 @@ class Mario:
         self.net.target.load_state_dict(self.net.online.state_dict())
 
     def save(self):
-        save_path = (
-                self.save_dir / f"mario_net_{int(self.curr_step // self.save_every)}.chkpt"
-        )
+        save_path = self.save_dir / f"mario_net_{int(self.curr_step // self.save_every)}.chkpt"
         torch.save(
             dict(model=self.net.state_dict()),
             save_path,
@@ -135,6 +136,25 @@ class Mario:
         print(f"Load Mario net model from {filepath}")
         checkpoint = torch.load(filepath)
         self.net.load_state_dict(checkpoint['model'])
+
+    def load_latest(self):
+        def dirname2time(dirname):
+            date, time = dirname.split("T")
+            time = time.replace("-", ":")
+            return datetime.fromisoformat('T'.join([date, time]))
+
+        ckpt_dirs = os.listdir(self.save_dir.parent)
+        pattern = r"(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})"
+        ckpt_dirs = [ckpt_dir for ckpt_dir in ckpt_dirs if re.match(pattern, ckpt_dir)]
+        ckpt_dirs = sorted(ckpt_dirs, key=lambda x: dirname2time(x), reverse=True)
+
+        for ckpt_dir in ckpt_dirs:
+            filenames = os.listdir(os.path.join(self.save_dir.parent, ckpt_dir))
+            for filename in filenames:
+                if filename.endswith(".chkpt") and filename.startswith("mario_net_"):
+                    self.load(f'{os.path.join(self.save_dir.parent, ckpt_dir)}/{filename}')
+                    return
+        print('No saved model found')
 
     def learn(self):
         if self.curr_step % self.sync_every == 0:

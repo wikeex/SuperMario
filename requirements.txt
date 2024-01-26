@@ -18,7 +18,7 @@ nes-py==8.2.1
 networkx==3.0
 numpy==1.23.2
 packaging==21.3
-Pillow==9.2.0
+Pillow==10.2.0
 pyglet==1.5.21
 pynput==1.7.6
 pyobjc-core==8.5
@@ -27,12 +27,12 @@ pyobjc-framework-Cocoa==8.5
 pyobjc-framework-Quartz==8.5
 pyparsing==3.0.9
 python-dateutil==2.8.2
-requests==2.28.1
+requests==2.31.0
 six==1.16.0
 sympy==1.11.1
-torch==2.0.0
-torchaudio==2.0.1
-torchvision==0.15.1
+torch==2.1.2
+torchaudio==2.1.2
+torchvision==0.16.2
 tqdm==4.64.0
 typing_extensions==4.3.0
 urllib3==1.26.12

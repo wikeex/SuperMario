@@ -87,7 +87,7 @@ def init_env():
 
 
 def init_resnet18_env():
-    env = gym_super_mario_bros.make("SuperMarioBros-1-1-v3")
+    env = gym_super_mario_bros.make("SuperMarioBros-1-1-v0")
     env = JoypadSpace(env, custom_space)
 
     env = SkipFrame(env, skip=4)
