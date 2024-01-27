@@ -33,7 +33,7 @@ class Mario:
 
         self.gamma = 0.9
 
-        self.optimizer = torch.optim.Adam(self.net.parameters(), lr=0.00025)
+        self.optimizer = torch.optim.Adam(self.net.parameters(), lr=0.0005)
         self.loss_fn = torch.nn.SmoothL1Loss()
 
         self.burnin = 5e3  # min. experiences before training

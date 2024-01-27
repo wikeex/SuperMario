@@ -48,15 +48,15 @@ class BaseNet(nn.Module):
         )
 
         self.a_back_bone = nn.Sequential(
-            NoisyFactorizedLinear(3136, 512),
+            nn.Linear(3136, 512),
             nn.ReLU(),
             NoisyFactorizedLinear(512, output_dim),
         )
 
         self.v_back_bone = nn.Sequential(
-            NoisyFactorizedLinear(3136, 512),
+            nn.Linear(3136, 512),
             nn.ReLU(),
-            NoisyFactorizedLinear(512, 1),
+            nn.Linear(512, 1),
         )
 
     def forward(self, input):
