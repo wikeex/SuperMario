@@ -4,8 +4,6 @@ from collections import deque
 import numpy as np
 import torch
 
-import environment
-import master_buffer
 from net import MarioNet
 
 
@@ -22,9 +20,6 @@ class Mario:
         if self.use_cuda:
             self.net = self.net.to(device=torch.device('cuda'))
 
-        self.exploration_rate = 0.5
-        self.exploration_rate_decay = 0.999998
-        self.exploration_rate_min = 0.05
         self.curr_step = 0
 
         self.save_every = 5e5  # no. of experiences between saving Mario Net
@@ -56,24 +51,15 @@ class Mario:
         Outputs:
         action_idx (int): An integer representing which action Mario will perform
         """
-        # EXPLORE
-        if np.random.rand() < self.exploration_rate:
-            action_idx = np.random.randint(self.action_dim)
 
-        # EXPLOIT
+        state = state.__array__()
+        if self.use_cuda:
+            state = torch.tensor(state).cuda()
         else:
-            state = state.__array__()
-            if self.use_cuda:
-                state = torch.tensor(state).cuda()
-            else:
-                state = torch.tensor(state)
-            state = state.unsqueeze(0)
-            action_values = self.net(state, model="online")
-            action_idx = torch.argmax(action_values, dim=1).item()
-
-        # decrease exploration_rate
-        self.exploration_rate *= self.exploration_rate_decay
-        self.exploration_rate = max(self.exploration_rate_min, self.exploration_rate)
+            state = torch.tensor(state)
+        state = state.unsqueeze(0)
+        action_values = self.net(state, model="online")
+        action_idx = torch.argmax(action_values, dim=1).item()
 
         # increment step
         self.curr_step += 1
@@ -146,7 +132,7 @@ class Mario:
                 self.save_dir / f"mario_net_{int(self.curr_step // self.save_every)}.chkpt"
         )
         torch.save(
-            dict(model=self.net.state_dict(), exploration_rate=self.exploration_rate),
+            dict(model=self.net.state_dict()),
             save_path,
         )
         print(f"MarioNet saved to {save_path} at step {self.curr_step}")
@@ -155,7 +141,6 @@ class Mario:
         print(f"Load Mario net model from {filepath}")
         checkpoint = torch.load(filepath)
         self.net.load_state_dict(checkpoint['model'])
-        self.exploration_rate = checkpoint['exploration_rate']
 
     def learn(self):
         if self.curr_step % self.sync_every == 0:
@@ -190,4 +175,4 @@ class Mario:
             {'params': [p for n, p in params if 'resnet18' in n or 'target' in n], 'lr': 0},
             {'params': [p for n, p in params if 'resnet18' not in n and 'target' not in n], 'lr': self.learning_rate},
         ]
-        return torch.optim.AdamW(param_group, lr=self.learning_rate)
+        return torch.optim.Adam(param_group, lr=self.learning_rate)
