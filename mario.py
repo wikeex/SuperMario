@@ -30,6 +30,7 @@ class Mario:
         self.save_every = 5e5  # no. of experiences between saving Mario Net
         self.memory = deque(maxlen=10000)
         self.batch_size = 32
+        self.learning_rate = 1e-4
 
         # load master buffer memory
         # self.master_memory = master_buffer.load('/home/wikeex/PycharmProjects/SuperMario/master_buffer_files')
@@ -37,7 +38,7 @@ class Mario:
 
         self.gamma = 0.9
 
-        self.optimizer = torch.optim.Adam(self.net.parameters(), lr=0.00025)
+        self.optimizer = self.get_group_parameters(self.net)
         self.loss_fn = torch.nn.SmoothL1Loss()
 
         self.burnin = 5e3  # min. experiences before training
@@ -182,3 +183,11 @@ class Mario:
         loss = self.update_q_online(td_est, td_tgt)
 
         return td_est.mean().item(), loss
+
+    def get_group_parameters(self, model):
+        params = list(model.named_parameters())
+        param_group = [
+            {'params': [p for n, p in params if 'resnet18' in n or 'target' in n], 'lr': 0},
+            {'params': [p for n, p in params if 'resnet18' not in n and 'target' not in n], 'lr': self.learning_rate},
+        ]
+        return torch.optim.AdamW(param_group, lr=self.learning_rate)
