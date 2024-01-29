@@ -43,14 +43,8 @@ class MarioNet(nn.Module):
   input -> (conv2d + relu) x 3 -> flatten -> (dense + relu) x 2 -> output
   """
 
-    def __init__(self, input_dim, output_dim):
+    def __init__(self, output_dim):
         super().__init__()
-        c, h, w = input_dim
-
-        if h != 84:
-            raise ValueError(f"Expecting input height: 84, got: {h}")
-        if w != 84:
-            raise ValueError(f"Expecting input width: 84, got: {w}")
 
         self.resnet18 = models.resnet18(pretrained=True)
 
@@ -66,6 +60,8 @@ class MarioNet(nn.Module):
 
         # Q_target parameters are frozen.
         for p in self.target.parameters():
+            p.requires_grad = False
+        for p in self.resnet18.parameters():
             p.requires_grad = False
 
     def forward(self, input, model):
