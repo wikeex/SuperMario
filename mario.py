@@ -8,14 +8,15 @@ from net import MarioNet
 
 
 class Mario:
-    def __init__(self, action_dim, save_dir):
+    def __init__(self, state_dim, action_dim, save_dir):
+        self.state_dim = state_dim
         self.action_dim = action_dim
         self.save_dir = save_dir
 
         self.use_cuda = torch.cuda.is_available()
 
         # Mario's DNN to predict the most optimal action - we implement this in the Learn section
-        self.net = MarioNet(self.action_dim).float()
+        self.net = MarioNet(self.state_dim, self.action_dim).float()
         if self.use_cuda:
             self.net = self.net.to(device=torch.device('cuda'))
 
